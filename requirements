@@ -1,1 +1,8 @@
-streamlit run app.py
+#streamlit run app.py
+flask 
+flask-cors 
+streamlit
+openai
+langchain
+langchain-community
+azure-search-documents
