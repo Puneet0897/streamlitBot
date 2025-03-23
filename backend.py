@@ -1,7 +1,7 @@
 import os
+import json
 from langchain_community.vectorstores.azuresearch import AzureSearch
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
-from azure.search.documents.indexes.models import ScoringProfile
 
 # Azure Configuration
 AZURE_OPENAI_ENDPOINT = "https://oai-z-autosol-revamp-n-002.openai.azure.com/openai/deployments/gpt40/chat/completions?api-version=2025-01-01-preview"
@@ -34,14 +34,43 @@ llm = AzureChatOpenAI(
     api_version=AZURE_API_VERSION
 )
 
-# Function to get response from RAG
-def get_response(question):
+# Function to get response & follow-up questions
+def get_response_and_followups(question):
     # Perform similarity search
     docs = vector_store.similarity_search(question, k=12, search_type="hybrid")
     context = "\n".join([doc.page_content for doc in docs])
 
     # Chat Prompt
-    prompt = f"You are a helpful assistant that answers the question based on the context.\nContext:\n{context}\nQuestion: {question}"
+    prompt = f"""
+    You are a helpful AI assistant. Answer the question based on the provided context.
+    Also, generate 2-3 relevant follow-up questions that the user might ask next.
     
+    Context:
+    {context}
+    
+    Question: {question}
+    
+    Respond in JSON format:
+    {{
+      "answer": "<your answer>",
+      "follow-up questions": ["<follow-up 1>", "<follow-up 2>", "<follow-up 3>"]
+    }}
+    """
+
     response = llm.invoke({"question": question, "context": context})
-    return response.content
+
+    # Handle JSON Response
+    try:
+        response_content = response.content.strip()
+
+        # If response is a stringified JSON, parse it
+        if response_content.startswith('"') and response_content.endswith('"'):
+            response_content = json.loads(response_content)  # Convert string to JSON string
+        elif isinstance(response_content, str):
+            response_content = json.loads(response_content)  # Directly parse JSON
+
+        return response_content  # Should be a valid dictionary
+
+    except Exception as e:
+        print(f"Error parsing response: {e}")
+        return {"answer": "Sorry, I couldn't process your request.", "follow-up questions": []}
